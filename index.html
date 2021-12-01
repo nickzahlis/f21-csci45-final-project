@@ -1,0 +1,323 @@
+<!DOCTYPE <!DOCTYPE html>>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>COVID-19 Data Visualization</title>
+    </head>
+    <table id="mainTable">
+
+    </table>
+    <script>
+        //because document.write overwrites the rest of the HTML, all html elements must be inserted with JS
+        //innerHTML would be a solution for this, but it's difficult to use with tables of this size (from our research)
+        //link to fetch() from
+        const apiLink = 'https://api.covidactnow.org/v2/states.timeseries.json?apiKey=7fa87da9fab8420b8c026c6143a05bda';
+        /*const stateToInt = {
+            AZ: 0,  AK: 1,  AR: 2,  AZ: 3,  CA: 4,  CO: 5,  CT: 6,  DC: 7, DE: 8,   FL: 9,  
+            GA: 10, HI: 11, IA: 12, ID: 13, IL: 14, IN: 15, KS: 16, KY: 17, LA: 18, MA: 19, 
+            MD: 20, ME: 21, MI: 22, MN: 23, MO: 24, MP: 25, MS: 26, MT: 27, NC: 28, ND: 29,
+            CO: NE, NH: 31, NJ: 32, NM: 33, NV: 34, NY: 35, OH: 36, OK: 37, OR: 38, PA: 39,
+            PR: 40, RI: 41, SC: 42, SD: 43, TN: 44, TX: 45, UT: 46, VA: 47, VT: 48, WA: 49,
+            WI: 50, WV: 51, WY: 52
+        }*/
+        const startDate = new Date;
+        //starting date for the earliest tracked state was 1/21/20
+        startDate.setDate(21);
+        startDate.setMonth(0); //Months are zero indexed, thanks javascript <3
+        startDate.setFullYear(2020);
+        let maxDeathsArray = [];
+        let maxCasesArray = [];
+
+        //find the max #s of each metric by state. data will later be used to compute the red / green values for the heat map
+        //vaccination rates will be all color coded on the same scale, so we don't need the max values for those
+        function findMax(data) {
+            var maxCases = 0;
+            var maxDeaths = 0;
+            for (i = 0; i < data.length; i++) {
+                for (j = 0; j < data[i].actualsTimeseries.length; j++) {
+                    if (data[i].actualsTimeseries[j].newCases > maxCases) {
+                        maxCases = data[i].actualsTimeseries[j].newCases;
+                    }
+                    if (data[i].actualsTimeseries[j].newDeaths > maxDeaths) {
+                        maxDeaths = data[i].actualsTimeseries[j].newDeaths;
+                    }
+                }
+                maxCasesArray[i] = maxCases;
+                maxDeathsArray[i] = maxDeaths;
+                maxCases = 0;
+                maxDeaths = 0;
+            }
+        }
+
+        //different states started reporting on different dates, these offsets help align the data
+        let stateOffsetAlpabetical = [40,40,43,5,4,40,40,45,41,40,40,41,40,40,3,40,40,41,40,11,44,42,43,45,41,68,41,44,41,46,27,41,40,43,41,40,43,45,38,41,41,40,40,49,40,22,36,42,46,0,15,48,50];
+        //vaccine data starts on same date (12/14/20) for all states, so offset will be days from 1/21 -> 12/24 minus the original offset
+
+        //the display functions create the tables with styling that makes them invisible. reasoning for this is to only have one table visible at a time
+        function displayNewDeaths (data) {
+            document.write("<div style='display: none' id='deathDisplay'>")
+            document.write("<h1>New Covid-19 Deaths By State</h1>");
+            document.write("<table border=1 style='width: 100%' id='newDeathTable'");
+            document.write("<tr>");
+            //this for loop writes the dates at the top. I used [0] just to get the total # of dates right
+            //starts at negative 1 so we can put the title of the graph in the top left cell
+            for (var i = -1; i < data[0].actualsTimeseries.length + stateOffsetAlpabetical[0]; i++) {
+                if (i == -1) document.write("<td> New Deaths By State </td>");
+                else {
+                    document.write("<td>" + (startDate.getMonth() + 1) + "/" + startDate.getDate() + "/" + startDate.getFullYear() + "</td>");
+                    startDate.setDate(startDate.getDate() + 1);
+                }
+            }
+            document.write("</tr>");
+            //the first for loop writes the name of the state at the far left of the table
+            //the nested for loop writes the metrics (no data if it's null) and then the name of the state on the far right of the table
+            for (var i = 0; i < data.length; i++) {
+            document.write("<tr>");
+            document.write("<td>" + data[i].state + "</td>");
+                for (var j = 0; j < data[i].actualsTimeseries.length + stateOffsetAlpabetical[i]; j++) {
+                    //GET RED AND GREEN VALUES FOR HEATMAP (same code can be used for newCases)
+                    //find percentage of maxDeaths that the current value has
+                    var percentage = 0;
+                    if (j > stateOffsetAlpabetical[i]) {
+                        percentage = data[i].actualsTimeseries[j - stateOffsetAlpabetical[i]].newDeaths / maxDeathsArray[i];
+                    }
+                    var red = 0;
+                    var green = 0;
+                    if (percentage < 0.5 && j > stateOffsetAlpabetical[i]) {
+                        green = 255;
+                        red = percentage * 255;
+                    }
+                    else if (percentage >= 0.5  && j > stateOffsetAlpabetical[i]) {
+                        red = 255;
+                        green = 255 - ((percentage - 0.5) * 510);
+                    }
+                    //END OF GETTING RED AND GREEN VALUES
+                    if (j < stateOffsetAlpabetical[i]) document.write("<td>" + 0 + "</td>");
+                    else if (data[i].actualsTimeseries[j - stateOffsetAlpabetical[i]].newDeaths == null) document.write("<td> No Data </td>");
+                    else document.write("<td style='background-color: rgb(" + red + "," + green + ",0'>" + data[i].actualsTimeseries[j - stateOffsetAlpabetical[i]].newDeaths + "</td>");
+                    if (j == (data[i].actualsTimeseries.length + stateOffsetAlpabetical[i]) - 1) document.write("<td>" + data[i].state + "</td>");
+                }
+            document.write("</tr>");
+            }
+            document.write("</table>");
+            document.write("</div>")
+        }
+
+        function displayNewCases (data) {
+            document.write("<div style='display: none' id='caseDisplay'>")
+            document.write("<h1>New Covid-19 Cases By State</h1>");
+            document.write("<table border=1 style='width: 100%'  id='newCaseTable'>");
+            document.write("<tr>");
+            startDate.setDate(21);
+            startDate.setMonth(0); //Months are zero indexed, thanks javascript <3
+            startDate.setFullYear(2020);
+            for (var i = -1; i < data[0].actualsTimeseries.length + stateOffsetAlpabetical[0]; i++) {
+                if (i == -1) document.write("<td> New Cases By State </td>");
+                else {
+                    document.write("<td>" + (startDate.getMonth() + 1) + "/" + startDate.getDate() + "/" + startDate.getFullYear() + "</td>");
+                    startDate.setDate(startDate.getDate() + 1);
+                }
+
+            }
+            document.write("</tr>");
+            for (var i = 0; i < data.length; i++) {
+            document.write("<tr>");
+            document.write("<td>" + data[i].state + "</td>");
+                for (var j = 0; j < data[i].actualsTimeseries.length + stateOffsetAlpabetical[i]; j++) {
+                    //GET RED AND GREEN VALUES FOR HEATMAP (same code can be used for newCases)
+                    //find percentage of maxCases that the current value has
+                    var percentage = 0;
+                    if (j > stateOffsetAlpabetical[i]) {
+                        percentage = data[i].actualsTimeseries[j - stateOffsetAlpabetical[i]].newCases / maxCasesArray[i];
+                    }
+                    var red = 0;
+                    var green = 0;
+                    if (percentage < 0.5 && j > stateOffsetAlpabetical[i]) {
+                        green = 254;
+                        red = percentage * 510;
+                    }
+                    else if (percentage >= 0.5  && j > stateOffsetAlpabetical[i]) {
+                        red = 254;
+                        green = 255 - ((percentage - 0.5) * 510);
+                    }
+                    //END OF GETTING RED AND GREEN VALUES
+                    if (j < stateOffsetAlpabetical[i]) document.write("<td>" + 0 + "</td>");
+                    else if (data[i].actualsTimeseries[j - stateOffsetAlpabetical[i]].newCases == null) document.write("<td> No Data </td>");
+                    else document.write("<td style='background-color: rgb(" + red + "," + green + ",0'>"+ data[i].actualsTimeseries[j - stateOffsetAlpabetical[i]].newCases + "</td>");
+                    if (j == (data[i].actualsTimeseries.length + stateOffsetAlpabetical[i]) - 1) document.write("<td>" + data[i].state + "</td>");
+                }
+            document.write("</tr>");
+            }
+            document.write("</table>");
+            document.write("</div>");
+        }
+
+        //starting indexes for vaccine info isn't 0, other metrics were tracked earlier so we have to find the date that we start seeing vacc info
+        //we can use original offsets to compute this. 328 is days between 1/21/20 and 12/14/20
+        
+
+        function displayVaccs (data) {
+            var startingDate = 328 - stateOffsetAlpabetical[0];
+            document.write("<div style='display: none' id='vaccsDisplay'>")
+            document.write("<h1>Initiated Covid-19 Vaccinations By State</h1>");
+            document.write("<table border=1 style='width: 100%'  id='vaccsTable'>");
+            document.write("<tr>");
+            startDate.setDate(14);
+            startDate.setMonth(11); //Months are zero indexed, thanks javascript <3
+            startDate.setFullYear(2020);
+            for (var i = -1; i < data[0].actualsTimeseries.length + stateOffsetAlpabetical[0] - 328; i++) {
+                if (i == -1) document.write("<td> Initiated Vaccinations By State </td>");
+                else {
+                    document.write("<td>" + (startDate.getMonth() + 1) + "/" + startDate.getDate() + "/" + startDate.getFullYear() + "</td>");
+                    startDate.setDate(startDate.getDate() + 1);
+                }
+            }
+            document.write("</tr>");
+            for (var i = 0; i < data.length; i++) {
+            document.write("<tr>");
+            document.write("<td>" + data[i].state + "</td>");
+                for (var j = 328 - stateOffsetAlpabetical[i]; j < data[i].metricsTimeseries.length; j++) {
+                    //compute colors start
+                    if (data[i].metricsTimeseries[j].vaccinationsInitiatedRatio != null) {
+                        var percentage = data[i].metricsTimeseries[j].vaccinationsInitiatedRatio;
+                        var red = 0;
+                        var green = 0;
+                        if (percentage < 0.5) {
+                            red = 254;
+                            green = Math.round(percentage * 510);
+                        }
+                        else {
+                            green = 254;
+                            red = Math.round(255 - ((percentage - 0.5) * 510));
+                        }
+                    }
+                    //compute colors end
+                    if (data[i].metricsTimeseries[j].vaccinationsInitiatedRatio == null) document.write("<td> No Data </td>");
+                    else document.write("<td style='background-color: rgb(" + red + "," + green + ",0'>"+ Math.round(data[i].metricsTimeseries[j].vaccinationsInitiatedRatio * 10000) / 100 + "% </td>");
+                    if (j == data[i].metricsTimeseries.length - 1) document.write("<td>" + data[i].state + "</td>");
+                }
+            document.write("</tr>");
+            }
+            document.write("</table>");
+            document.write("</div>");
+        }
+
+        function displayVaccf (data) {
+            var startingDate = 328 - stateOffsetAlpabetical[0];
+            document.write("<div style='display: none' id='vaccfDisplay'>")
+            document.write("<h1>Completed Covid-19 Vaccinations By State</h1>");
+            document.write("<table border=1 style='width: 100%'  id='vaccfTable'>");
+            document.write("<tr>");
+            startDate.setDate(14);
+            startDate.setMonth(11); //Months are zero indexed, thanks javascript <3
+            startDate.setFullYear(2020);
+            for (var i = -1; i < data[0].actualsTimeseries.length + stateOffsetAlpabetical[0] - 328; i++) {
+                if (i == -1) document.write("<td> Completed Vaccinations By State </td>");
+                else {
+                    document.write("<td>" + (startDate.getMonth() + 1) + "/" + startDate.getDate() + "/" + startDate.getFullYear() + "</td>");
+                    startDate.setDate(startDate.getDate() + 1);
+                }
+            }
+            document.write("</tr>");
+            for (var i = 0; i < data.length; i++) {
+            document.write("<tr>");
+            document.write("<td>" + data[i].state + "</td>");
+                for (var j = 328 - stateOffsetAlpabetical[i]; j < data[i].metricsTimeseries.length; j++) {
+                    //compute colors start
+                    if (data[i].metricsTimeseries[j].vaccinationsCompletedRatio != null) {
+                        var percentage = data[i].metricsTimeseries[j].vaccinationsCompletedRatio;
+                        var red = 0;
+                        var green = 0;
+                        if (percentage < 0.5) {
+                            red = 254;
+                            green = Math.round(percentage * 510);
+                        }
+                        else {
+                            green = 254;
+                            red = Math.round(255 - ((percentage - 0.5) * 510));
+                        }
+                    }
+                    //compute colors end
+                    if (data[i].metricsTimeseries[j].vaccinationsCompletedRatio == null) document.write("<td> No Data </td>");
+                    else document.write("<td style='background-color: rgb(" + red + "," + green + ",0'>"+ Math.round(data[i].metricsTimeseries[j].vaccinationsCompletedRatio * 10000) / 100 + "% </td>");
+                    if (j == data[i].metricsTimeseries.length - 1) document.write("<td>" + data[i].state + "</td>");
+                }
+            document.write("</tr>");
+            }
+            document.write("</table>");
+            document.write("</div>");
+        }
+
+        //these functions are the ones that change the styling on the tables to be visible. they are the ones called by the html table menu
+        function deathClick () {
+            var deaths = document.getElementById("deathDisplay");
+            var cases = document.getElementById("caseDisplay");
+            var vaccs = document.getElementById("vaccsDisplay");
+            var vaccf = document.getElementById("vaccfDisplay");
+            deaths.style.display = "block";
+            cases.style.display = "none";
+            vaccs.style.display = "none";
+            vaccf.style.display = "none";
+        } 
+        function caseClick () {
+            var deaths = document.getElementById("deathDisplay");
+            var cases = document.getElementById("caseDisplay");
+            var vaccs = document.getElementById("vaccsDisplay");
+            var vaccf = document.getElementById("vaccfDisplay");
+            deaths.style.display = "none";
+            cases.style.display = "block";
+            vaccs.style.display = "none";
+            vaccf.style.display = "none";
+        }
+        function vaccsClick () {
+            var deaths = document.getElementById("deathDisplay");
+            var cases = document.getElementById("caseDisplay");
+            var vaccs = document.getElementById("vaccsDisplay");
+            var vaccf = document.getElementById("vaccfDisplay");
+            deaths.style.display = "none";
+            cases.style.display = "none";
+            vaccs.style.display = "block";
+            vaccf.style.display = "none";
+
+        }
+        function vaccfClick () {
+            var deaths = document.getElementById("deathDisplay");
+            var cases = document.getElementById("caseDisplay");
+            var vaccs = document.getElementById("vaccsDisplay");
+            var vaccf = document.getElementById("vaccfDisplay");
+            deaths.style.display = "none";
+            cases.style.display = "none";
+            vaccs.style.display = "none";
+            vaccf.style.display = "block";
+        }
+
+        var data;
+        //backslashes on next line are for formatting
+        var dropDownMenu = "<div class ='dropdownMenu' style = 'background-color:lightblue'>\
+                            <p>Dropdown</p>\
+                            <div class ='dropdownOptions' style = 'background-color:lightblue'>\
+                                <p onclick='caseClick()' id='caseButton'>New Cases</p>\
+                                <p onclick='deathClick()' id='deathsButton'>New Deaths</p>\
+                                <p onclick='vaccsClick()' id='v1Button'>Initiated Vaccinations</p>\
+                                <p onclick='vaccfClick()' id='v2Button'>Completed Vaccinations</p>\
+                            </div>\
+                            </div>\
+                            <style>\
+                                .dropdownMenu { display:inline-block; position: relative; } \
+                                .dropdownOptions { display: none; position: absolute; } \
+                                .dropdownMenu:hover .dropdownOptions { display: block; } \
+                            </style>";
+        async function getData() {
+            const response = await fetch(apiLink); //call api
+            data = await response.json(); //put api data into variable
+            document.write(dropDownMenu);
+            findMax(data);
+            displayNewDeaths(data);
+            displayNewCases(data);
+            displayVaccs(data);
+            displayVaccf(data);
+            document.write("<p>Data Sourced From COVIDActNow.org</p>");
+        }
+        getData();
+    </script>
+</html>
